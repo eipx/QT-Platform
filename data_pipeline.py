@@ -10,8 +10,7 @@ from line_profiler import LineProfiler
 ts.set_token(my_token)
 pro = ts.pro_api()
 profiler = LineProfiler()
-
-
+'''
 def profile(func):
     def inner(*args, **kwargs):
         profiler.add_function(func)
@@ -21,7 +20,7 @@ def profile(func):
 
 def print_stats():
     profiler.print_stats()   
-
+'''
 class index_pipeline:
     def __init__(self, index_code, start_date, data_path):
         self.index_code = index_code
@@ -58,12 +57,13 @@ class index_pipeline:
                 
         print("job_done! ")
     
-    @profile
+    #@profile
     def update_hs300_daily(self):
         # read stock list file from universe
         today = datetime.today().strftime("%Y%m%d")
         stock_list = pd.read_csv(self.data_path+'universe', dtype=str)
         count = 0
+        close_market_date = []
         for id in stock_list["Index"]:
             df = pd.read_csv(self.data_path+"daily_price/"+str(id)+".csv", dtype=str)  
             count += 1
@@ -73,18 +73,20 @@ class index_pipeline:
             else:
                 most_recent_date = datetime.strptime(df["trade_date"].iloc[0], "%Y%m%d")
             
-            # check if the most recent date is today
-            if most_recent_date < datetime.today():
-                next_date = most_recent_date + timedelta(days=1)
-                lines_append = pro.daily(ts_code=id, start_date=next_date.strftime("%Y%m%d"), end_date=today)
+            # check if all the data are up to date
+            first_day = most_recent_date + timedelta(days=1)
+            if  first_day not in close_market_date and first_day < datetime.today():
+                lines_append = pro.daily(ts_code=id, start_date=first_day.strftime("%Y%m%d"), end_date=today)
                 if len(lines_append) != 0:
                     lines_append = lines_append[["ts_code", "trade_date", "open", "close", "low", "high"]]
                     print(count, "updating id", id, "from", lines_append["trade_date"].iloc[-1], "to", today)
                     new_df = pd.concat([lines_append, df], ignore_index=True, axis=0)
                     new_df.to_csv(self.data_path+"daily_price/"+str(id)+'.csv', index=False)
                     continue
+                else:
+                    close_market_date.append(first_day)
             print(count, "id", id, "is already up to date")
-        print_stats()
+        #print_stats()
             
         
 if __name__ == "__main__":
