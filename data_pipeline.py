@@ -1,26 +1,15 @@
 import tushare as ts
 import pandas as pd
-import os
-from ts_token import my_token
+from credentials import *
 from datetime import datetime, timedelta
 from time import sleep
+from sqlalchemy import create_engine
 import traceback
-from line_profiler import LineProfiler
 
 ts.set_token(my_token)
 pro = ts.pro_api()
-profiler = LineProfiler()
-'''
-def profile(func):
-    def inner(*args, **kwargs):
-        profiler.add_function(func)
-        profiler.enable_by_count()
-        return func(*args, **kwargs)
-    return inner
+my_conn = create_engine("mysql+pymysql://"+my_user+":"+my_password+"@localhost/qt_database")
 
-def print_stats():
-    profiler.print_stats()   
-'''
 class index_pipeline:
     def __init__(self, index_code, start_date, data_path):
         self.index_code = index_code
@@ -38,7 +27,6 @@ class index_pipeline:
         stock_list = pd.read_csv(self.data_path+'universe', dtype=str)
         count = 0
         today = datetime.today().strftime("%Y%m%d")
-        os.makedirs(self.data_path+"daily_price", exist_ok=True)
         for id in stock_list["Index"]:
             count += 1
             while True:
@@ -46,18 +34,17 @@ class index_pipeline:
                 try:
                     df = pro.daily(ts_code=id, start_date=self.start_date, end_date=today)
                     df = df[["ts_code", "trade_date", "open", "close", "low", "high"]]
-                    df.to_csv(self.data_path+"daily_price/"+str(id)+'.csv', index=False)
+                    df.to_sql(con=my_conn, name="daily_prices", if_exists="append", index=False)
                     print(str(count) + " id: "+id+" successfully loaded")
                     break
                 except Exception:
+                    traceback.print_exc()
                     print("fail to get id: "+id+", repeat now...")
                     sleep(10)
-                    traceback.print_exc()
                     continue
                 
         print("job_done! ")
     
-    #@profile
     def update_hs300_daily(self):
         # read stock list file from universe
         today = datetime.today().strftime("%Y%m%d")
@@ -91,5 +78,5 @@ class index_pipeline:
         
 if __name__ == "__main__":
     hs300_pipe = index_pipeline("399300.SZ", "20170901", "data/")
-    #hs300_pipe.get_index_history_daily()
+    hs300_pipe.get_index_history_daily()
     hs300_pipe.update_hs300_daily()
