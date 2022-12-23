@@ -29,10 +29,11 @@ class index_pipeline:
         my_conn.execute("TRUNCATE TABLE daily_prices")
 
         # get the stock ID list
-        stock_list = pd.read_csv(self.data_path+'universe', dtype=str)
+        query = "SELECT ts_code FROM universe"
+        stock_list = pd.read_sql(query, my_conn)
         count = 0
         today = datetime.now(market_timezone).strftime("%Y%m%d")
-        for id in stock_list["Index"]:
+        for id in stock_list["ts_code"]:
             count += 1
             while True:
                 # try to get daily price for each stock
