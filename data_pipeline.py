@@ -6,6 +6,8 @@ from time import sleep
 from sqlalchemy import create_engine
 from pytz import timezone
 import traceback
+import smtplib
+import textwrap
 
 market_timezone = timezone("Asia/Shanghai")
 ts.set_token(my_token)
@@ -77,6 +79,7 @@ class IndexPipeline:
                 return False
         return True
 
+
 class DatabaseUpdater:
 
     def __init__(self, pipeline):
@@ -109,12 +112,60 @@ class DatabaseUpdater:
                 return 
         print("The database is already up to date, no update are needed.")      
 
+
+class AlertSender:
+    
+    def __init__(self, pipeline):
+        self.pipeline = pipeline
+    
+    def send_alert(self):
+        subject = "Stock Daily Report"
+        query = '''
+                SELECT * 
+                FROM ( 
+                    SELECT *,
+                        ROW_NUMBER() OVER (PARTITION BY ts_code ORDER BY trade_date DESC) AS rn
+                    FROM daily_prices
+                ) t
+                WHERE rn <= 2;
+                '''
+        df = pd.read_sql(query, self.pipeline.my_conn)
+        groups = df.groupby("ts_code")
+        
+        # Create the email body
+        id_column_width = 4
+        code_column_width = 11
+        price_column_width = 21
+        change_column_width = 10
+        body = "---------------------Daily Data Update---------------------\n\n"
+        body += f" id    ts_code    last_market_price    curr_market_price    change%\n"
+        column_width = 5
+        for id, group in enumerate(groups):
+            body += " {:03d}".format(id+1)
+            body += "{:>{}}".format(group[0], code_column_width)
+            body += "{:>{}.2f}".format(group[1]['close'].iloc[1], price_column_width)
+            body += "{:>{}.2f}".format(group[1]['close'].iloc[0], price_column_width)
+            body += "{:>{}.2f}\n".format(
+                (group[1]["close"].iloc[0]-group[1]["close"].iloc[1])/group[1]["close"].iloc[1]*100, 
+                change_column_width)
+
+        # Send the email
+        message = f'Subject: {subject}\n\n{body}'
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(user, password)
+            server.sendmail(user, to, message)
+
+        print(f"Email sent to {to} with subject '{subject}'")
+
+
 def main():
     pipeline = IndexPipeline("399300.SZ", "20170901", "data/", my_conn)
     if not pipeline.setup:
         pipeline.get_history()
     database_updater = DatabaseUpdater(pipeline)
     database_updater.update_daily()
+    alert_sender = AlertSender(pipeline)
+    alert_sender.send_alert()
 
 if __name__ == "__main__":
     main()
