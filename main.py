@@ -8,6 +8,7 @@ from pytz import timezone
 import traceback
 import smtplib
 from tqdm import tqdm
+from sqlalchemy.sql.expression import and_
 
 market_timezone = timezone("Asia/Shanghai")
 ts.set_token(my_token)
@@ -21,6 +22,21 @@ class IndexPipeline:
         self.start_date = start_date
         self.data_path = data_path
         self.engine = engine
+        try:
+            query = '''
+            CREATE TABLE daily_prices(
+                id INT PRIMARY KEY NOT NULL AUTO_INCREMENT,
+                ts_code VARCHAR(16) NOT NULL,
+                trade_date DATE NOT NULL,
+                open DECIMAL(10, 2) NOT NULL,
+                close DECIMAL(10, 2) NOT NULL,
+                low DECIMAL(10, 2) NOT NULL,
+                high DECIMAL(10, 2) NOT NULL
+            )
+            '''
+            engine.execute(query)
+        except Exception:
+            pass
 
     def get_list(self):
         today = datetime.now(market_timezone).strftime("%Y%m%d")
@@ -161,16 +177,15 @@ class EMACalculator:
         
     def calc_history(self):
 
-        metadata = MetaData()
-        my_table = Table('daily_prices', metadata, autoload=True, autoload_with=self.pipeline.engine)
-        if not 'EMA%d'%self.period in my_table.columns:
+        try:
             engine.execute('ALTER TABLE %s ADD COLUMN %s %s' % (
-                'EMA%d'%self.period, 
+                'daily_prices', 
                 'ema_%d'%self.period, 
                 'DECIMAL(10, 2)'))
-
+        except Exception:
+            pass
         # Execute a SELECT query and store the results in a DataFrame
-        query = 'SELECT ts_code, trade_date, close FROM daily_prices ORDER BY trade_date'
+        query = 'SELECT * FROM daily_prices ORDER BY trade_date'
         df = pd.read_sql_query(query, self.pipeline.engine)
         # Calculate the EMA values
         groups = df.groupby('ts_code')
@@ -184,13 +199,10 @@ class EMACalculator:
             # Calculate the EMA values
             group['ema_%d'%self.period] = round(group['close'].ewm(span=self.period).mean(), 2)
             merged_groups.append(group)
-        new_table = pd.concat(merged_groups)
-        new_table.drop('close', axis=1)
+        calc_result = pd.concat(merged_groups)
+        print('Inserting the calculated result to the database...')
+        calc_result.to_sql(con=self.pipeline.engine, name="daily_prices", if_exists="replace", index=False)
 
-        print('Merging two tables...')
-        merged_df = pd.merge(df, new_table, on=['ts_code', 'trade_date'])
-        print('Writing to MySQL...')
-        merged_df.to_sql(con=self.pipeline.engine, name="daily_prices", if_exists="replace", index=False)
 
 def main():
     pipeline = IndexPipeline("399300.SZ", "20170901", "data/", engine)
