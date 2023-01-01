@@ -9,6 +9,9 @@ import traceback
 import smtplib
 from tqdm import tqdm
 from sqlalchemy.sql.expression import and_
+import matplotlib.pyplot as plt
+import matplotlib.dates as mpdates
+from mplfinance.original_flavor import candlestick_ohlc
 
 market_timezone = timezone("Asia/Shanghai")
 ts.set_token(my_token)
@@ -52,7 +55,7 @@ class IndexPipeline:
 
         # get the stock ID list
         query = "SELECT ts_code FROM universe"
-        stock_list = pd.read_sql(query, engine)
+        stock_list = pd.read_sql(query, self.engine)
         count = 0
         today = datetime.now(market_timezone).strftime("%Y%m%d")
         for id in tqdm(stock_list["ts_code"], total=len(stock_list["ts_code"]), desc='Loading history data...'):
@@ -72,6 +75,11 @@ class IndexPipeline:
                     continue
         print("job done")
     
+    def get_stock(self, ts_code: str) -> pd.DataFrame:
+        query = 'SELECT * FROM daily_prices WHERE ts_code = "%s"' % ts_code
+        df = pd.read_sql(query, self.engine)
+        return df
+
     @property
     def setup(self):
         # get next date to update date
@@ -203,6 +211,42 @@ class EMACalculator:
         print('Inserting the calculated result to the database...')
         calc_result.to_sql(con=self.pipeline.engine, name="daily_prices", if_exists="replace", index=False)
 
+class Plotter:
+
+    def __init__(self, df, title=''):
+        self.df = df
+        self.title = title
+    
+    def plot(self):
+        plt.style.use('dark_background')
+
+        # extracting Data for plotting
+        self.df = self.df[['trade_date', 'open', 'high', 'low', 'close']]
+
+        # convert into datetime object
+        self.df['trade_date'] = pd.to_datetime(self.df['trade_date'])
+        self.df['trade_date'] = self.df['trade_date'].map(mpdates.date2num)
+        
+        # creating Subplots
+        fig, ax = plt.subplots()
+        
+        # plotting the data
+        candlestick_ohlc(
+            ax, 
+            self.df.values, 
+            width = 0.6, 
+            colorup = 'green', 
+            colordown = 'red',
+            alpha = 0.8)
+        # allow grid
+        ax.grid(True)
+        
+        # Setting labels
+        ax.set_xlabel('Date')
+        ax.set_ylabel('Price')
+        
+        plt.savefig("mygraph.png")
+
 
 def main():
     pipeline = IndexPipeline("399300.SZ", "20170901", "data/", engine)
@@ -212,8 +256,10 @@ def main():
     database_updater.update_daily()
     #email_sender = EmailSender(pipeline)
     #email_sender.send_update()
-    ema_calculator = EMACalculator(pipeline, 100)
-    ema_calculator.calc_history()
+    #ema_calculator = EMACalculator(pipeline, 100)
+    #ema_calculator.calc_history()
+    plotter = Plotter(pipeline.get_stock('000001.SZ'))
+    plotter.plot()
 
 if __name__ == "__main__":
     main()
