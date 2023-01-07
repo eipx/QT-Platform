@@ -45,10 +45,9 @@ class TaskScheduler:
         """
         if not self.pipeline.setup:
             self.pipeline.get_history()
-        timezone = pytz.timezone("Asia/Shanghai")
         self.calculator.calc_history()
 
-        df = self.pipeline.get_stock('000001.SZ')
+        df = self.pipeline.get_stock('000001.SZ', start_date="2022-12-01", end_date="2023-01-04")
         self.plotter.plot(df)
         scheduler = sched.scheduler(time.time, time.sleep)
 
