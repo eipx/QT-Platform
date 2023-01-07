@@ -24,6 +24,18 @@ class EMACalculator:
                 'DECIMAL(10, 2)'))
         except Exception:
             pass
+
+        query = """
+        SELECT * 
+        FROM daily_prices
+        WHERE ema_%d IS NULL
+        ORDER BY trade_date;
+        """ % self.period
+        df = pd.read_sql_query(query, self.pipeline.engine)
+        if df.empty:
+            print("All the EMA%d values have already been calculated." % self.period)
+            return 
+        
         # Execute a SELECT query and store the results in a DataFrame
         query = 'SELECT * FROM daily_prices ORDER BY trade_date;'
         df = pd.read_sql_query(query, self.pipeline.engine)
@@ -142,4 +154,7 @@ class EMACalculator:
         """ % self.period
         df = pd.read_sql_query(query, self.pipeline.engine)
         return df["ts_code"].tolist()
+
+
+
 

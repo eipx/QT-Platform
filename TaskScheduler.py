@@ -1,8 +1,9 @@
 from credentials import my_token
 import tushare as ts
 import pytz
-import schedule
 import time
+from datetime import datetime, timedelta
+import sched
 
 import Pipeline
 import DatabaseUpdater
@@ -27,27 +28,43 @@ class TaskScheduler:
         self.plotter = Plotter.Plotter(self.pipeline)
 
     def job(self):
+        """
+        This is the update job that needs to be executed daily.
+        """
+        print("Updating...")
         self.updater.update_daily()
         if self.calculator.update() == True:
             self.sender.send_update(self.calculator.find_crossover())
 
     def run(self):
+        """
+        This method will check set up the pipeline first, 
+        then calculate the EMA history, give an example plot
+        do job once and then schedule the job daily at 5pm in
+        Shanghai time.
+        """
         if not self.pipeline.setup:
             self.pipeline.get_history()
-        time_zone = pytz.timezone("Asia/Shanghai")
+        timezone = pytz.timezone("Asia/Shanghai")
         self.calculator.calc_history()
 
         df = self.pipeline.get_stock('000001.SZ')
         self.plotter.plot(df)
+        scheduler = sched.scheduler(time.time, time.sleep)
 
-        schedule.every().day.at("17:00", timezone=time_zone).do(self.job)
+        #self.job()
+        def schedule_task():
+            now = datetime.now()
+            now.replace(hour=20, minute=0, second=0, microsecond=0)
+            scheduled_time = now.replace(hour=20, minute=0, second=0, microsecond=0)
+            if scheduled_time < now:
+                scheduled_time += timedelta(days=1)
+            scheduler.enterabs(time.mktime(scheduled_time.timetuple()), 1, self.job)
+            scheduler.enterabs(time.mktime(scheduled_time.timetuple()), 1, schedule_task)
         
-        self.job()
-
-        while True:
-            # check for scheduled jobs
-            schedule.run_pending()
-            time.sleep(1)
+        schedule_task()
+        scheduler.run()
+        
         
         
         
