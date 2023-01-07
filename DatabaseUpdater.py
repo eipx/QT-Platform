@@ -26,7 +26,7 @@ class DatabaseUpdater:
 
         print("-----------------Updating database-----------------")
         # get next date to update date
-        query = "SELECT MAX(trade_date) AS date FROM daily_prices"
+        query = "SELECT MAX(trade_date) AS date FROM daily_prices;"
         today = datetime.now(self.pipeline.timezone).date()
         today_str = today.strftime("%Y%m%d")
         next_update_date = (pd.read_sql(query, self.pipeline.engine))["date"][0] + timedelta(days=1)
@@ -36,10 +36,18 @@ class DatabaseUpdater:
         if next_update_date < today:
             open_info = self.pro.query("trade_cal", start_date=next_update_str, end_date=today_str)
             if len(open_info) != 0 and (1 in open_info["is_open"].values):
-                query = "SELECT ts_code FROM universe"
+                query = "SELECT ts_code FROM universe;"
                 stock_list = pd.read_sql(query, self.pipeline.engine)["ts_code"]
                 new_info = self.pro.daily(ts_code=','.join(stock_list.tolist()), start_date=next_update_str, end_date=today_str)
-                new_info = new_info[["ts_code", "trade_date", "open", "close", "low", "high"]]
+                new_info = new_info[[
+                    "ts_code", 
+                    "trade_date", 
+                    "open", 
+                    "close", 
+                    "low", 
+                    "high", 
+                    "vol",
+                    "amount"]]
                 new_info.to_sql(con=self.pipeline.engine, name="daily_prices", if_exists="append", index=False)
                 print("The database is successfully updated!")
                 return 

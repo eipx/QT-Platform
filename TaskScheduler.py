@@ -29,9 +29,10 @@ class TaskScheduler:
             self.pipeline.get_history()
         time_zone = pytz.timezone("Asia/Shanghai")
 
-        self.calculator.calc_history()
+        #self.calculator.calc_history()
         self.updater.update_daily()
-        self.calculator.calc_history()
+        #self.calculator.calc_history()
+        self.calculator.update()
         df = self.pipeline.get_stock('000001.SZ')
         self.plotter.plot(df)
 

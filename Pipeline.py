@@ -1,7 +1,6 @@
 from time import sleep
 from pytz import timezone
 from sqlalchemy import create_engine
-import traceback
 from credentials import my_user, my_password
 from datetime import datetime, timedelta
 import pandas as pd
@@ -27,19 +26,21 @@ class IndexPipeline:
         self.pro = tushare_api
         try:
             query = '''
-            CREATE TABLE daily_prices(
-                id INT PRIMARY KEY NOT NULL AUTO_INCREMENT,
+            CREATE TABLE IF NOT EXISTS daily_prices(
                 ts_code VARCHAR(16) NOT NULL,
                 trade_date DATE NOT NULL,
                 open DECIMAL(10, 2) NOT NULL,
                 close DECIMAL(10, 2) NOT NULL,
                 low DECIMAL(10, 2) NOT NULL,
-                high DECIMAL(10, 2) NOT NULL
-            )
+                high DECIMAL(10, 2) NOT NULL,
+                vol DECIMAL(32, 2) NOT NULL,
+                amount DECIMAL(32, 3) NOT NULL,
+                PRIMARY KEY (ts_code, trade_date)
+            );
             '''
             self.engine.execute(query)
-        except Exception:
-            pass
+        except Exception as e:
+            print(e)
 
     def get_list(self):
         """
@@ -71,12 +72,12 @@ class IndexPipeline:
                 # try to get daily price for each stock
                 try:
                     df = self.pro.daily(ts_code=id, start_date=self.start_date, end_date=today)
-                    df = df[["ts_code", "trade_date", "open", "close", "low", "high"]]
+                    df = df[["ts_code", "trade_date", "open", "close", "low", "high", "vol", "amount"]]
                     df.to_sql(con=self.engine, name="daily_prices", if_exists="append", index=False)
                     #print(str(count) + " id: "+id+" successfully loaded")
                     break
-                except Exception:
-                    traceback.print_exc()
+                except Exception as e:
+                    print(e)
                     print("fail to get id: "+id+", repeat now...")
                     sleep(10)
                     continue
@@ -98,7 +99,7 @@ class IndexPipeline:
             query = '''
                 SELECT * 
                 FROM daily_prices 
-                WHERE ts_code = "%s" AND trade_date BETWEEN "%s" AND "%s" 
+                WHERE ts_code = "%s" AND trade_date BETWEEN "%s" AND "%s" ;
                 '''% (ts_code, start_date, end_date)
         df = pd.read_sql(query, self.engine)
         return df
@@ -111,7 +112,7 @@ class IndexPipeline:
         up. Same applies if the database is empty.
         """
         # get next date to update date
-        query = "SELECT MAX(trade_date) AS date FROM daily_prices"
+        query = "SELECT MAX(trade_date) AS date FROM daily_prices;"
         today = datetime.now(self.timezone).date()
         df = pd.read_sql(query, self.engine)["date"]
         
