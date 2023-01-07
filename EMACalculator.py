@@ -1,6 +1,5 @@
 import pandas as pd
 from tqdm import tqdm
-from sqlalchemy.orm import sessionmaker
 
 class EMACalculator:
     """
@@ -44,7 +43,11 @@ class EMACalculator:
         print('Inserting the calculated result to the database...')
         calc_result.to_sql(con=self.pipeline.engine, name="daily_prices", if_exists="replace", index=False)
 
-    def update(self):
+    def update(self) -> bool:
+        """
+        This method is used for updating data, which create an temporary table intermediate
+        and then update the daily_prices table.
+        """
         query = """
                 SELECT * 
                 FROM daily_prices
@@ -52,10 +55,12 @@ class EMACalculator:
                 ORDER BY trade_date;
                 """ % self.period
         df_to_calc = pd.read_sql_query(query, self.pipeline.engine)
+        if df_to_calc.empty:
+            print("All the EMA%d values have already been calculated." % self.period)
+            return False
+
         latest_date = df_to_calc['trade_date'].min()
-        if latest_date is None:
-            print("Please get the history first before the update")
-            return
+
         query = """
                 SELECT MAX(trade_date) 
                 AS date
@@ -64,8 +69,9 @@ class EMACalculator:
                 """ % latest_date
         df_prior = pd.read_sql_query(query, self.pipeline.engine)
         if df_prior['date'].iloc[0] is None:
-            print("The EMA%s is already up to date" % self.period)
-            return
+            print("Please calculate the EMA%d history first" % self.period)
+            return False
+
         query = """
                 SELECT *
                 FROM daily_prices
@@ -117,4 +123,23 @@ class EMACalculator:
             print(e)
         finally:
             self.pipeline.engine.execute("DROP TABLE intermediate;")
-        
+            return True
+    
+    def find_crossover(self) -> list:
+        """
+        This method is used to identify stocks that 
+        have a crossover between the candlestick and the EMA.
+        """
+        stocks = []
+        query = """
+        SELECT *
+        FROM daily_prices
+        WHERE trade_date IN (
+            SELECT MAX(trade_date) 
+            FROM daily_prices
+            )
+        AND ema_%d BETWEEN open AND close;
+        """ % self.period
+        df = pd.read_sql_query(query, self.pipeline.engine)
+        return df["ts_code"].tolist()
+
