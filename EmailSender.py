@@ -2,6 +2,8 @@ import smtplib
 import pandas as pd
 from credentials import user, password, to
 from tqdm import tqdm
+import pytz
+from datetime import datetime
 
 class EmailSender:
     
@@ -25,7 +27,11 @@ class EmailSender:
                 '''
         df = pd.read_sql(query, self.pipeline.engine)
         groups = df.groupby("ts_code")
-        headline = "---------------------Daily Data Update---------------------\n\n"
+        timezone = pytz.timezone('Asia/Shanghai')
+        current_date = datetime.now(timezone).strftime("%Y-%m-%d")
+        headline = "---------------------Daily Data Update---------------------\n"
+        headline += "%s\n\n" % current_date
+
         # Create the email body
         merged_rows = []
         for ts_code, group in tqdm(groups, total=len(groups), desc='Processing'):

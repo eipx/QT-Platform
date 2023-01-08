@@ -54,7 +54,6 @@ class TaskScheduler:
         #self.job()
         def schedule_task():
             now = datetime.now()
-            now.replace(hour=20, minute=0, second=0, microsecond=0)
             scheduled_time = now.replace(hour=20, minute=0, second=0, microsecond=0)
             if scheduled_time < now:
                 scheduled_time += timedelta(days=1)

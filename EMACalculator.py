@@ -150,8 +150,8 @@ class EMACalculator:
             SELECT MAX(trade_date) 
             FROM daily_prices
             )
-        AND ema_%d BETWEEN open AND close;
-        """ % self.period
+        AND ema_%d >= low AND ema_%d <= close;
+        """ % (self.period, self.period)
         df = pd.read_sql_query(query, self.pipeline.engine)
         return df["ts_code"].tolist()
 
