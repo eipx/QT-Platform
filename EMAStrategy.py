@@ -1,6 +1,7 @@
 import pandas as pd
 from tqdm import tqdm
 import numpy as np
+from sqlalchemy.engine.reflection import Inspector
 
 class EMAStrategy:
     """
@@ -11,6 +12,7 @@ class EMAStrategy:
     period(int): the calculating period of the EMA
     """
     def __init__(self, pipeline, period):
+        self.name = "ema_%d" % period
         self.pipeline = pipeline
         self.period = period
 
@@ -55,23 +57,28 @@ class EMAStrategy:
         calc_result = pd.concat(merged_groups)
         print('Inserting the calculated result to the database...')
         calc_result.to_sql(con=self.pipeline.engine, name="daily_prices", if_exists="replace", index=False)
-        query = """
-        IF NOT EXISTS (
-            SELECT 1 FROM information_schema.COLUMNS 
-            WHERE table_name = 'daily_prices' AND column_name = 'score_ema_%d'
-            ) THEN
-            ALTER TABLE daily_prices
-            ADD score_ema_%d BOOLEAN;
+        conn = self.pipeline.engine.connect()
 
-            UPDATE daily_prices
-            SET score_ema_%d = CASE
-            WHEN ema_%d > low AND ema_%d < close THEN 1
-            ELSE 0
-            END;
-        END IF;
-        """ % tuple([self.period]*5)
-        print("Calculating EMA_%d Signals..." % self.period)
-        self.pipeline.engine.execute(query)
+        # Create an inspector
+        inspector = Inspector.from_engine(conn)
+        # Check if the column exists in the table
+        if 'score_ema_%d' % self.period not in inspector.get_columns('daily_prices'):
+            print("Calculating EMA_%d Signals..." % self.period)
+            try:
+                conn.execute("""ALTER TABLE daily_prices
+                                ADD COLUMN score_ema_%d BOOLEAN;
+                                """ % (self.period))
+                conn.execute("""UPDATE daily_prices SET score_ema_%d = CASE 
+                            WHEN ema_%d > low AND ema_%d < close 
+                            THEN 1 ELSE 0 END;""" %tuple([self.period]*3))
+            except Exception as e:
+                print("The signals already exist")
+
+        else:
+            print("Score_ema_100 found")
+        conn.close()
+
+
 
     def update(self) -> bool:
         """
@@ -170,11 +177,8 @@ class EMAStrategy:
         query = """
         SELECT ts_code, trade_date, score_ema_%d
         FROM daily_prices
-        WHERE trade_date IN (
-            SELECT MAX(trade_date) 
-            FROM daily_prices
-            )
-        AND trade_date >= '%s' AND trade_date <= '%s';
+        WHERE trade_date >= '%s' AND trade_date <= '%s' 
+        ORDER BY trade_date;
         """ % (self.period, start_date, end_date)
         df = pd.read_sql_query(query, self.pipeline.engine)
         return df

@@ -12,7 +12,7 @@ class EmailSender:
     
     def send_update(self, alert_stock: list):
         subject = "Stock Daily Report"
-        alert = "These stocks have crossovers between candlestick and EMA:\n"
+        alert = "These stocks have crossovers between candlestick and EMA100:\n"
         for i in range(len(alert_stock)):
             alert += (str(i) + " " + str(alert_stock[i]) + "\n")
 

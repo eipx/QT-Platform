@@ -7,7 +7,7 @@ import sched
 
 import Pipeline
 import DatabaseUpdater
-import EMACalculator
+import EMAStrategy
 import EmailSender
 import Plotter
 
@@ -24,7 +24,7 @@ class TaskScheduler:
         self.pipeline = Pipeline.IndexPipeline(index_code, start_date, self.pro)
         self.updater = DatabaseUpdater.DatabaseUpdater(self.pipeline, self.pro)
         self.sender = EmailSender.EmailSender(self.pipeline)
-        self.calculator = EMACalculator.EMACalculator(self.pipeline, 100)
+        self.calculator = EMAStrategy.EMAStrategy(self.pipeline, 100)
         self.plotter = Plotter.Plotter(self.pipeline)
 
     def job(self):
@@ -45,16 +45,16 @@ class TaskScheduler:
         """
         if not self.pipeline.setup:
             self.pipeline.get_history()
-        self.calculator.calc_history()
+        #self.calculator.calc_history()
 
-        df = self.pipeline.get_stock('000001.SZ', start_date="2022-12-01", end_date="2023-01-04")
+        df = self.pipeline.get_stock('000063.SZ', start_date="2022-10-01", end_date="2023-01-04")
         self.plotter.plot(df)
         scheduler = sched.scheduler(time.time, time.sleep)
 
         #self.job()
         def schedule_task():
             now = datetime.now()
-            scheduled_time = now.replace(hour=20, minute=0, second=0, microsecond=0)
+            scheduled_time = now.replace(hour=10, minute=34, second=0, microsecond=0)
             if scheduled_time < now:
                 scheduled_time += timedelta(days=1)
             scheduler.enterabs(time.mktime(scheduled_time.timetuple()), 1, self.job)

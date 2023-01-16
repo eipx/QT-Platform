@@ -82,7 +82,28 @@ class IndexPipeline:
                     sleep(10)
                     continue
         print("job done")
-    
+
+    def get_all_stocks(self, start_date=None, end_date=None) -> pd.DataFrame:
+        """
+        Parameters:
+        ts_code(str): the stock code.
+        start_date: the dataframe start date.
+        end_date: the dataframe end date.
+        
+        Returns:
+        the dataframe of the daily prices with the given parameters.
+        """
+        if start_date is None:
+            query = 'SELECT * FROM daily_prices'
+        else:
+            query = '''
+                SELECT * 
+                FROM daily_prices 
+                WHERE trade_date BETWEEN "%s" AND "%s" ;
+                '''% (start_date, end_date)
+        df = pd.read_sql(query, self.engine)
+        return df
+
     def get_stock(self, ts_code: str, start_date=None, end_date=None) -> pd.DataFrame:
         """
         Parameters:
