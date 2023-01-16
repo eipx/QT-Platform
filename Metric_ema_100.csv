@@ -1,4 +1,4 @@
-,ts_code,signal_count,win_rate,major_drawback,avg
+,ts_code,signal_count,win_rate%,major_drawback%,avg%
 0,000001.SZ,1,100.0,0.0,23.28
 1,000002.SZ,16,50.0,-12.04,1.23
 2,000063.SZ,15,46.67,-23.62,-6.06

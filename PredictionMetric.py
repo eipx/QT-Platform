@@ -22,8 +22,11 @@ class PredictionMetric:
         end_date: str
         """
         df = self.signalGenerator.pipeline.get_stock(stock, start_date, end_date)
-        buy_price = df['open'].iloc[0]
+        print(df)
+        buy_price = df['open'].iloc[1]
         df['return_%s' % strategy.name] = (df['close'] - buy_price) / buy_price * 100
+        df.at[0, 'return_%s' % strategy.name] = 0
+        df.to_csv("check.csv")
         self.plotter.show_distribution(df, strategy.name)
 
     def generate_metric(self, strategy, start_date, end_date):
@@ -50,10 +53,10 @@ class PredictionMetric:
             new_row = {
                 'ts_code': code, 
                 'signal_count': total_count,
-                'win_rate': round(
+                'win_rate%': round(
                     (sub_df['return'] > 0).sum()*100/total_count if total_count != 0 else 0, 2),
-                'major_drawback': round(sub_df['return'].min()*100, 2),
-                'avg': round(sub_df.loc[sub_df['score_ema_100'] == 1, 'return'].mean()*100, 2)}
+                'major_drawback%': round(sub_df['return'].min()*100, 2),
+                'avg%': round(sub_df.loc[sub_df['score_ema_100'] == 1, 'return'].mean()*100, 2)}
             new_row_df = pd.DataFrame([new_row], index = [0])
             metric = pd.concat([metric, new_row_df], ignore_index=True, axis=0)
         print(metric)

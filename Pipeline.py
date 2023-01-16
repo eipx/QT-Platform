@@ -94,12 +94,13 @@ class IndexPipeline:
         the dataframe of the daily prices with the given parameters.
         """
         if start_date is None:
-            query = 'SELECT * FROM daily_prices'
+            query = 'SELECT * FROM daily_prices ORDER BY trade_date'
         else:
             query = '''
                 SELECT * 
                 FROM daily_prices 
-                WHERE trade_date BETWEEN "%s" AND "%s" ;
+                WHERE trade_date BETWEEN "%s" AND "%s" 
+                ORDER BY trade_date;
                 '''% (start_date, end_date)
         df = pd.read_sql(query, self.engine)
         return df
@@ -115,12 +116,13 @@ class IndexPipeline:
         the dataframe of the daily prices with the given parameters.
         """
         if start_date is None:
-            query = 'SELECT * FROM daily_prices WHERE ts_code = "%s"' % ts_code
+            query = 'SELECT * FROM daily_prices WHERE ts_code = "%s" ORDER BY trade_date' % ts_code
         else:
             query = '''
                 SELECT * 
                 FROM daily_prices 
-                WHERE ts_code = "%s" AND trade_date BETWEEN "%s" AND "%s" ;
+                WHERE ts_code = "%s" AND trade_date BETWEEN "%s" AND "%s" 
+                ORDER BY trade_date;
                 '''% (ts_code, start_date, end_date)
         df = pd.read_sql(query, self.engine)
         return df
