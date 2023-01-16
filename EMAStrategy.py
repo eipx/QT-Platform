@@ -1,7 +1,8 @@
 import pandas as pd
 from tqdm import tqdm
+import numpy as np
 
-class EMACalculator:
+class EMAStrategy:
     """
     This class is responsible for calculating the EMA value for the table
 
@@ -12,8 +13,8 @@ class EMACalculator:
     def __init__(self, pipeline, period):
         self.pipeline = pipeline
         self.period = period
-        
-    def calc_history(self):
+
+    def execute(self):
         """
         This method is used for calculating all the EWA history
         """
@@ -54,6 +55,23 @@ class EMACalculator:
         calc_result = pd.concat(merged_groups)
         print('Inserting the calculated result to the database...')
         calc_result.to_sql(con=self.pipeline.engine, name="daily_prices", if_exists="replace", index=False)
+        query = """
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.COLUMNS 
+            WHERE table_name = 'daily_prices' AND column_name = 'score_ema_%d'
+            ) THEN
+            ALTER TABLE daily_prices
+            ADD score_ema_%d BOOLEAN;
+
+            UPDATE daily_prices
+            SET score_ema_%d = CASE
+            WHEN ema_%d > low AND ema_%d < close THEN 1
+            ELSE 0
+            END;
+        END IF;
+        """ % tuple([self.period]*5)
+        print("Calculating EMA_%d Signals..." % self.period)
+        self.pipeline.engine.execute(query)
 
     def update(self) -> bool:
         """
@@ -107,6 +125,10 @@ class EMACalculator:
             group['ema_%d'%self.period] = round(group['close'].shift(1).ewm(span=self.period).mean(), 2)
             merged_groups.append(group[1:])
         calc_result = pd.concat(merged_groups)
+        calc_result["score_ema_100"] = np.where(
+            (df["ema_100"] > df["low"]) & 
+            (df["ema_100"] < df["close"]), 1, 0)
+
         print('Updating the new EMA%s result to the database...' % self.period)
         query = """
         CREATE TABLE IF NOT EXISTS intermediate(
@@ -114,8 +136,9 @@ class EMACalculator:
             trade_date DATE NOT NULL,
             close DECIMAL(10, 2) NOT NULL,
             ema_%d Decimal(10, 2) NOT NULL,
+            score_ema_%d BOOLEAN NOT NULL,
             PRIMARY KEY (ts_code, trade_date)
-            );""" % self.period
+            );""" % tuple([self.period]*2)
         self.pipeline.engine.execute(query)
         calc_result.to_sql(
             con=self.pipeline.engine, 
@@ -128,8 +151,9 @@ class EMACalculator:
                 JOIN intermediate
                 ON daily_prices.ts_code = intermediate.ts_code 
                 AND daily_prices.trade_date = intermediate.trade_date
-                SET daily_prices.ema_%d = intermediate.ema_%d;
-                """ %(self.period, self.period)
+                SET daily_prices.ema_%d = intermediate.ema_%d,
+                    daily_prices.score_ema_%d, intermediate.score_ema_%d;
+                """ %tuple([self.period]*4)
             )
         except Exception as e:
             print(e)
@@ -137,23 +161,23 @@ class EMACalculator:
             self.pipeline.engine.execute("DROP TABLE intermediate;")
             return True
     
-    def find_crossover(self) -> list:
+    def fetch_signals(self, start_date, end_date) -> pd.DataFrame:
         """
         This method is used to identify stocks that 
         have a crossover between the candlestick and the EMA.
         """
         stocks = []
         query = """
-        SELECT *
+        SELECT ts_code, trade_date, score_ema_%d
         FROM daily_prices
         WHERE trade_date IN (
             SELECT MAX(trade_date) 
             FROM daily_prices
             )
-        AND ema_%d >= low AND ema_%d <= close;
-        """ % (self.period, self.period)
+        AND trade_date >= '%s' AND trade_date <= '%s';
+        """ % (self.period, start_date, end_date)
         df = pd.read_sql_query(query, self.pipeline.engine)
-        return df["ts_code"].tolist()
+        return df
 
 
 
