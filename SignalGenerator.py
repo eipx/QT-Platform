@@ -59,8 +59,8 @@ def main():
 
     metric = PredictionMetric.PredictionMetric(signalGenerator)
 
-    metric.plot_return_distribution('688363.SH', Strategy_ema100, "2021-11-01", "2023-01-11")
-    metric.generate_metric(Strategy_ema100, "2021-11-01", "2023-01-11")
+    metric.plot_return_distribution('000001.SZ', Strategy_ema100, "2020-08-04", "2023-01-11")
+    metric.generate_metric(Strategy_ema100, "2020-08-04", "2023-01-11")
 if __name__ == '__main__':
     main()
 
