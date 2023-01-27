@@ -1,7 +1,7 @@
 from time import sleep
 from pytz import timezone
 from sqlalchemy import create_engine
-from credentials import my_user, my_password
+from src.credentials import my_user, my_password
 from datetime import datetime, timedelta
 import pandas as pd
 from tqdm import tqdm
@@ -41,6 +41,9 @@ class IndexPipeline:
             self.engine.execute(query)
         except Exception as e:
             print(e)
+        finally:
+            if not self.setup:
+                self.get_history()
 
     def get_list(self):
         """
